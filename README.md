@@ -24,10 +24,11 @@ create-github-runner.sh # Shell script to bootstrap a runner
 * admin:org (organization runners)
 * Download & install roles
 
-⚠️ **Security**: store tokens in Ansible Vault or environment variables ⚠️
+⚠️ **Security** 
+Store tokens in Ansible Vault or environment variables 
 
-***Checkout***: https://www.jorgesintes.xyz/posts/self_hosted_github_runners
-
+⭐ ***Cleanup script***
+Cleanup script may be used with env instead of crontab - https://www.jorgesintes.xyz/posts/self_hosted_github_runners
 Could be used with env:
 ```
 ACTIONS_RUNNER_HOOK_JOB_STARTED
