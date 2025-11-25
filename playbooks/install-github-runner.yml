@@ -1,0 +1,269 @@
+---
+- name: Setup GitHub Actions Runner
+  hosts: tag_ansible_runner_yes
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # User Management
+    user_management:
+      - name: runner
+        comment: GitHub Action Runner user
+        shell: /bin/bash
+        groups:
+          - sudo
+          - docker
+        ssh_keys:
+          - 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDONrCwPIpv1BmCOKxPAwwSnn8W6sHg2lvU0kjqlaygMdbdRoY2Z2tEsCFNlc0lzshq/K1DH40dMHAHd7Nh3P7ybIWALmgWZdPaDYTMmS6iKna2WVtldZw6ziudTIbljmFB55s/dQju1n53nYlQ9BTZ9D9k4hXcY/time+wVpOQG4iQmcpQ+SVQ8gCUamNODRb2sSZht1Z+CwNmMZUECGqD9VGHW+bgUI7Ov/Q56TTNaYk3KLCxNrpAyjNoVJaGK5CKPQpGp7FPPx6nCXObFMh9hLSv1n8sMrICglk9wZtOanXbHkNNnPqPQso1lqR/FwkZGAu8a5DWdnYViHNYRsj9IFTLowbDNymF1sprFREFrUhlcT6OnkAzNbnjPu50/FeUIMZm0ApiedoUuYj3I74P8d5qFNDhZwUVq3vDJroGhlOb65pQfMk9ylWTv9oOibl4J07is28/a5IbG6mXYl4Vj384wf25+1w4XYlsGVuWm/JnP7wxAbHFyii5qcgkB5c= ubuntu@ansible-test'
+    
+    # GitHub Runner
+    hide_sensitive_logs: no
+    reinstall_runner: true
+    github_account: telenorconnexion
+    runner_org: yes
+    runner_labels:
+      - "{{ RUNNER_LABEL }}"
+    runner_version: "latest"
+    runner_user: runner
+    runner_group: "{{ RUNNER_GROUP }}"
+    
+    # Package lists
+    apt_packages:
+      - java-21-amazon-corretto-jdk
+      - nodejs
+      - unzip
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - software-properties-common
+      - python3-pip
+      - virtualenv
+      - python3-setuptools
+      - gnupg 
+      - lsb-release
+      - docker-ce
+      - docker-ce-cli
+      - docker-compose
+      - containerd.io 
+      - docker-buildx-plugin 
+      - docker-compose-plugin
+      - default-jre
+      - default-jdk
+      - maven
+      - jq
+      - ncdu
+      - net-tools
+      - sysstat
+      - python3.11-dev
+      - python3.11-venv
+      - python3.11-distutils
+      - python3.11-lib2to3
+      - python3.11-gdbm
+      - python3.11-tk
+      - gh
+
+  tasks:
+    # Group and User Setup
+    - name: Ensure group docker exists
+      ansible.builtin.group:
+        name: docker
+        state: present
+
+    - name: User Management
+      ansible.builtin.include_role:
+        name: user-management
+
+    # Create keyrings directory
+    - name: Ensure keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    # Add GPG keys the modern way
+    - name: Download Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Download NodeSource GPG key
+      ansible.builtin.get_url:
+        url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+        dest: /etc/apt/keyrings/nodesource.asc
+        mode: '0644'
+
+    - name: Download Amazon Corretto GPG key
+      ansible.builtin.get_url:
+        url: https://apt.corretto.aws/corretto.key
+        dest: /etc/apt/keyrings/corretto.asc
+        mode: '0644'
+
+    - name: Download GitHub CLI key
+      ansible.builtin.get_url:
+        url:  https://cli.github.com/packages/githubcli-archive-keyring.gpg
+        dest: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+        mode: '0644'
+
+    # Add repositories with signed-by using template approach
+    - name: Add Docker repository
+      ansible.builtin.copy:
+        content: |
+          deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        dest: /etc/apt/sources.list.d/docker.list
+        mode: '0644'
+
+    - name: Add NodeSource repository
+      ansible.builtin.copy:
+        content: |
+          deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_20.x nodistro main
+        dest: /etc/apt/sources.list.d/nodesource.list
+        mode: '0644'
+
+    - name: Add Amazon Corretto repository
+      ansible.builtin.copy:
+        content: |
+          deb [signed-by=/etc/apt/keyrings/corretto.asc] https://apt.corretto.aws stable main
+        dest: /etc/apt/sources.list.d/corretto.list
+        mode: '0644'
+
+    - name: Add GitHub CLI repository
+      ansible.builtin.copy:
+        content: |
+          deb [arch=amd64 signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main
+        dest: /etc/apt/sources.list.d/github-cli.list
+        mode: '0644'
+
+    # Registry python 3.11 as default
+    - name: Register and select python3.11 as default (priority 20)
+      community.general.alternatives:
+        name: python
+        link: /usr/bin/python
+        path: /usr/bin/python3.11
+        priority: 10
+        state: selected
+
+    # APT Update
+    - name: Update and upgrade APT
+      apt:
+        update_cache: yes
+        upgrade: full
+
+    # Package Installation
+    - name: Install yq through snapd
+      snap:
+        name: yq
+        state: present
+        classic: true
+
+    - name: Install required system packages
+      apt:
+        pkg: "{{ apt_packages }}"
+        state: latest
+
+    # AWS SAM Installation
+    - name: Install AWS SAM CLI
+      block:
+        - name: Create temporary directory for AWS SAM
+          ansible.builtin.file:
+            path: /var/tmp/aws_sam/
+            state: directory
+            mode: '0755'
+
+        - name: Download AWS SAM package
+          ansible.builtin.get_url:
+            url: https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+            dest: /var/tmp/aws-sam-cli-linux-x86_64.zip
+
+        - name: Extract AWS SAM package
+          ansible.builtin.unarchive:
+            src: /var/tmp/aws-sam-cli-linux-x86_64.zip
+            dest: /var/tmp/aws_sam/
+            remote_src: yes
+
+        - name: Execute AWS SAM install
+          ansible.builtin.command: /var/tmp/aws_sam/install
+          args:
+            creates: /usr/local/bin/sam
+
+      always:
+        - name: Cleanup AWS SAM installation files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /var/tmp/aws-sam-cli-linux-x86_64.zip
+            - /var/tmp/aws_sam/
+
+    # Roles
+    - name: Install GitHub Actions Runner
+      ansible.builtin.include_role:
+        name: github-actions_runner
+
+    - name: Install AWS CLI
+      ansible.builtin.include_role:
+        name: ubuntu_awscli2
+
+    # Copy purge script and add to crontab
+    - name: Create /root/scripts
+      file:
+        path: /root/scripts
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Copy docker_prune script to /root/scripts/
+      copy:
+        src: files/clean-runner.sh
+        dest: /root/scripts/clean-runner.sh
+        mode: 0700
+        owner: root
+        group: root
+
+    - name: Add clean-runner.sh to crontab
+      lineinfile:
+        path: /etc/crontab
+        line: "30 6 * * * root /root/scripts/clean-runner.sh -q"
+        state: present
+        backup: yes
+
+    # Enable services before reboot
+    - name: Enable Docker service
+      systemd:
+        name: docker
+        enabled: yes
+
+    - name: Enable GitHub Action Runner service
+      systemd:
+        name: "actions.runner.telenorconnexion.{{ ansible_hostname }}.service"
+        enabled: yes
+
+    # Server Reboot
+    - name: Reboot the server
+      reboot:
+        msg: "Reboot initiated by Ansible after system updates"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: whoami
+
+    - name: Wait for server to come back online
+      wait_for_connection:
+        connect_timeout: 20
+        sleep: 5
+        delay: 5
+        timeout: 300
+
+    - name: Verify Docker is running
+      systemd:
+        name: docker
+        state: started
+      register: docker_status
+
+    - name: Verify GitHub Actions Runner is running
+      systemd:
+        name: "actions.runner.telenorconnexion.{{ ansible_hostname }}.service"
+        state: started
+      register: runner_status
