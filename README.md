@@ -26,4 +26,10 @@ create-github-runner.sh # Shell script to bootstrap a runner
 
 ⚠️ **Security**: store tokens in Ansible Vault or environment variables ⚠️
 
-***Checkout***: https://www.jorgesintes.xyz/posts/self_hosted_github_runners/
+***Checkout***: https://www.jorgesintes.xyz/posts/self_hosted_github_runners
+
+Could be used with env:
+```
+ACTIONS_RUNNER_HOOK_JOB_STARTED
+ACTIONS_RUNNER_HOOK_JOB_COMPLETED
+```
