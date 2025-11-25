@@ -1,0 +1,5 @@
+Install Ansible roles:
+
+https://github.com/MonolithProjects/ansible-user_management
+https://github.com/MonolithProjects/ansible-github_actions_runner
+https://galaxy.ansible.com/ui/standalone/roles/dzangolab/awscli2/
